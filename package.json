@@ -1,12 +1,10 @@
 {
-  "name": "vitalcare-medcontrol",
+  "name": "vitalcare-native-test-panel",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
     "@capacitor/android": "latest",
     "@capacitor/cli": "latest",
-    "@capacitor/core": "latest",
-    "@capacitor/local-notifications": "latest"
-  },
-  "devDependencies": {}
+    "@capacitor/core": "latest"
+  }
 }
