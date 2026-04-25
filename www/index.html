@@ -666,20 +666,7 @@
     return window.Capacitor?.Plugins?.LocalNotifications || window.Capacitor?.LocalNotifications || null;
   }
 
-  function hasAndroidAlarmBridge(){
-    return !!(window.Android && typeof window.Android.scheduleAlarm === "function");
-  }
-
   async function ensureNativeNotifications(){
-    // Ponte Android nativa: pede permissão pelo MainActivity e usa AlarmManager real.
-    if(hasAndroidAlarmBridge()){
-      try{
-        if(typeof window.Android.requestNotificationPermission === "function") window.Android.requestNotificationPermission();
-      }catch(e){console.warn("Permissão Android bridge indisponível",e)}
-      return true;
-    }
-
-    // Fallback Capacitor LocalNotifications, caso rode sem a ponte nativa.
     const LN=getLocalNotifications();
     if(!LN)return false;
     try{
@@ -708,25 +695,10 @@
   }
 
   async function scheduleNativeReg(reg){
-    if(!reg||reg.done)return false;
+    const LN=getLocalNotifications();
+    if(!LN||!reg||reg.done)return false;
     const at=new Date(reg.previsto);
     if(isNaN(at.getTime())||at.getTime()<=Date.now()+1000)return false;
-
-    // Alarme Android real: tela cheia, som e funcionamento com app fechado.
-    if(hasAndroidAlarmBridge()){
-      try{
-        if(typeof window.Android.requestNotificationPermission === "function") window.Android.requestNotificationPermission();
-        window.Android.cancelAlarm(String(reg.id));
-        window.Android.scheduleAlarm(String(reg.id), String(at.getTime()), String(reg.med||"Medicamento"), String(reg.dose||""));
-        return true;
-      }catch(e){
-        console.warn("Falha no Android AlarmManager bridge",e);
-      }
-    }
-
-    // Fallback Capacitor.
-    const LN=getLocalNotifications();
-    if(!LN)return false;
     const ok=await ensureNativeNotifications();
     if(!ok)return false;
     try{
@@ -748,9 +720,6 @@
   }
 
   async function cancelNativeReg(id){
-    if(hasAndroidAlarmBridge()){
-      try{window.Android.cancelAlarm(String(id));return}catch(e){console.warn("Falha ao cancelar alarme Android",e)}
-    }
     const LN=getLocalNotifications();
     if(!LN)return;
     try{await LN.cancel({notifications:[{id:Number(id)}]})}catch(e){}
@@ -814,5 +783,116 @@
   init();
 })();
 </script>
+
+
+<!-- =========================================================
+     PAINEL DE TESTE NATIVO · VitalCare
+     Testa cada módulo Android sem alterar lógica nem banco.
+     ========================================================= -->
+<style>
+  #vc-native-test-box{margin:28px auto 0;width:100%;max-width:980px;border-radius:28px;padding:26px;background:radial-gradient(circle at 90% 10%,rgba(6,182,212,.22),transparent 32%),linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.03));border:1.5px solid rgba(148,163,184,.25);box-shadow:0 24px 60px rgba(2,6,23,.55);backdrop-filter:blur(18px);color:var(--text,#e7edf7)}
+  #vc-native-test-box .vc-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  #vc-native-test-box .vc-title{font-size:24px;font-weight:800;letter-spacing:-.03em}
+  #vc-native-test-box .vc-subtitle{color:var(--muted,#a6b9d6);font-size:14px;margin-top:6px;line-height:1.35}
+  #vc-native-test-box .vc-badge{padding:8px 12px;border-radius:999px;background:rgba(6,182,212,.16);border:1px solid rgba(6,182,212,.35);color:#67e8f9;font-size:12px;white-space:nowrap;font-weight:700}
+  #vc-native-test-box .vc-status{margin:14px 0 18px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.20);color:#c7d7ee;font-size:14px;white-space:pre-wrap;min-height:54px}
+  #vc-native-test-box .vc-grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:760px){#vc-native-test-box .vc-grid{grid-template-columns:1fr 1fr}}
+  #vc-native-test-box button{width:100%;min-height:54px;border:0;border-radius:18px;padding:14px 16px;font-size:16px;font-weight:750;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.18);text-align:left}
+  #vc-native-test-box button small{opacity:.85;font-size:13px;font-weight:600}
+  #vc-native-test-box .diagnostic{background:linear-gradient(145deg,#06b6d4,#0284c7)}
+  #vc-native-test-box .permission{background:linear-gradient(145deg,#22c55e,#15803d)}
+  #vc-native-test-box .exact{background:linear-gradient(145deg,#f59e0b,#d97706)}
+  #vc-native-test-box .notify{background:linear-gradient(145deg,#6366f1,#4338ca)}
+  #vc-native-test-box .sound{background:linear-gradient(145deg,#ef4444,#b91c1c)}
+  #vc-native-test-box .stop{background:linear-gradient(145deg,#64748b,#334155)}
+  #vc-native-test-box .fullscreen{background:linear-gradient(145deg,#a855f7,#7c3aed)}
+  #vc-native-test-box .schedule{background:linear-gradient(145deg,#14b8a6,#0f766e)}
+  #vc-native-test-box .vc-time{margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;padding:14px;border-radius:20px;border:1px solid rgba(148,163,184,.20);background:rgba(255,255,255,.04)}
+  #vc-native-test-box label{color:var(--muted,#a6b9d6);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  #vc-native-test-box input{width:100%;padding:14px;border-radius:16px;border:1px solid rgba(148,163,184,.28);background:rgba(7,17,31,.76);color:var(--text,#e7edf7);font-size:17px}
+  #vc-native-test-box .vc-footer{margin-top:18px;color:#7f93b2;font-size:12px;line-height:1.4;text-align:center}
+</style>
+
+<section id="vc-native-test-box">
+  <div class="vc-header">
+    <div>
+      <div class="vc-title">🧪 Painel de Teste Nativo</div>
+      <div class="vc-subtitle">Teste isolado dos módulos Android: ponte JS, permissão, notificação, som, tela cheia e AlarmManager.</div>
+    </div>
+    <div class="vc-badge">VitalCare Native</div>
+  </div>
+
+  <div id="vcNativeStatus" class="vc-status">Status: aguardando teste. Execute um botão por vez para saber exatamente o que funciona.</div>
+
+  <div class="vc-grid">
+    <button class="diagnostic" onclick="vcDiag()"><strong>🔎 Diagnóstico da ponte Android</strong><small>JS → nativo</small></button>
+    <button class="permission" onclick="vcRequestNotify()"><strong>🔐 Pedir permissão de notificação</strong><small>Android 13+</small></button>
+    <button class="exact" onclick="vcOpenExactAlarmSettings()"><strong>⚙️ Configuração de alarme exato</strong><small>Android 12+</small></button>
+    <button class="notify" onclick="vcShowNotification()"><strong>📩 Enviar notificação simples</strong><small>barra do sistema</small></button>
+    <button class="sound" onclick="vcPlayAlarmSound()"><strong>🔊 Tocar som de alarme</strong><small>teste sonoro</small></button>
+    <button class="stop" onclick="vcStopAlarmSound()"><strong>🛑 Parar som do alarme</strong><small>silenciar</small></button>
+    <button class="fullscreen" onclick="vcOpenFullScreen()"><strong>📱 Abrir tela cheia de alerta</strong><small>tipo despertador</small></button>
+    <button class="schedule" onclick="vcSchedule10()"><strong>⏰ Agendar teste para +10 segundos</strong><small>AlarmManager</small></button>
+  </div>
+
+  <div class="vc-time">
+    <label for="vcAlarmTime">⏱️ Escolher horário de despertar</label>
+    <input id="vcAlarmTime" type="time">
+    <button class="schedule" onclick="vcScheduleAtTime()"><strong>✅ Agendar no horário escolhido</strong><small>teste programado</small></button>
+    <button class="stop" onclick="vcCancelTest()"><strong>🛑 Cancelar alarme agendado</strong><small>cancelar teste</small></button>
+  </div>
+
+  <div class="vc-footer">Este painel não altera banco/localStorage nem interfere na lógica do MedControl.</div>
+</section>
+
+<script>
+(function(){
+  const TEST_ID = 999001;
+  function status(msg){
+    const el = document.getElementById('vcNativeStatus');
+    if(el) el.textContent = new Date().toLocaleTimeString('pt-BR') + ' — ' + msg;
+  }
+  function hasAndroid(){ return !!window.Android; }
+  function callNative(name, ...args){
+    try{
+      if(!hasAndroid()){ status('❌ window.Android não existe. A ponte nativa não foi injetada.'); return null; }
+      if(typeof window.Android[name] !== 'function'){ status('❌ Método Android.'+name+' não existe.'); return null; }
+      const r = window.Android[name](...args);
+      status('✅ Android.' + name + ' executado' + (r !== undefined ? ': ' + r : ''));
+      return r;
+    }catch(e){ status('❌ Erro em Android.' + name + ': ' + (e && e.message ? e.message : e)); return null; }
+  }
+  window.vcDiag = function(){
+    if(!hasAndroid()) return status('❌ window.Android não existe. APK não está com ponte nativa ativa.');
+    callNative('diagnose');
+  };
+  window.vcRequestNotify = function(){ callNative('requestNotificationPermission'); };
+  window.vcOpenExactAlarmSettings = function(){ callNative('openExactAlarmSettings'); };
+  window.vcShowNotification = function(){ callNative('showSimpleNotification','VitalCare teste','Notificação simples enviada pelo painel.'); };
+  window.vcPlayAlarmSound = function(){ callNative('playAlarmSound'); };
+  window.vcStopAlarmSound = function(){ callNative('stopAlarmSound'); };
+  window.vcOpenFullScreen = function(){ callNative('openFullScreen','Teste imediato','Tela cheia nativa funcionando.'); };
+  window.vcSchedule10 = function(){
+    const at = Date.now() + 10000;
+    callNative('scheduleAlarm', TEST_ID, at, 'Teste +10s', 'Alarme nativo agendado');
+    status('⏰ Agendado para: ' + new Date(at).toLocaleString('pt-BR'));
+  };
+  window.vcScheduleAtTime = function(){
+    const input = document.getElementById('vcAlarmTime');
+    const value = input ? input.value : '';
+    if(!value){ alert('Escolha um horário.'); return; }
+    const parts = value.split(':').map(Number);
+    const d = new Date();
+    d.setHours(parts[0], parts[1], 0, 0);
+    if(d.getTime() <= Date.now()) d.setDate(d.getDate()+1);
+    callNative('scheduleAlarm', TEST_ID, d.getTime(), 'Teste horário', 'Alarme agendado pelo painel');
+    status('⏰ Agendado para: ' + d.toLocaleString('pt-BR'));
+  };
+  window.vcCancelTest = function(){ callNative('cancelAlarm', TEST_ID); };
+  window.addEventListener('load', function(){ setTimeout(function(){ if(hasAndroid()) callNative('diagnose'); }, 800); });
+})();
+</script>
+
 </body>
-  </html>
+</html>
